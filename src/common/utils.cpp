@@ -289,42 +289,15 @@ uint32 packBitsBE(uint8* target, uint64 value, int32 byteOffset, int32 bitOffset
 
     bitmask ^= 0xFFFFFFFFFFFFFFFFLL; // invert bitmask
 
-    if ((lengthInBit + bitOffset) <= 8) // write shifted value to target
+    if ((lengthInBit + bitOffset) <= 64) // write shifted value to target
     {
-        uint8* dataPointer = &target[byteOffset];
-
-        uint8 bitmaskUC = (uint8)bitmask;
-        uint8 valueUC   = (uint8)value;
-
-        *dataPointer &= bitmaskUC;
-        *dataPointer |= valueUC;
-    }
-    else if ((lengthInBit + bitOffset) <= 16)
-    {
-        uint16* dataPointer = (uint16*)&target[byteOffset];
-
-        uint16 bitmaskUC = (uint16)bitmask;
-        uint16 valueUC   = (uint16)value;
-
-        *dataPointer &= bitmaskUC;
-        *dataPointer |= valueUC;
-    }
-    else if ((lengthInBit + bitOffset) <= 32)
-    {
-        uint32* dataPointer = (uint32*)&target[byteOffset];
-
-        uint32 bitmaskUC = (uint32)bitmask;
-        uint32 valueUC   = (uint32)value;
-
-        *dataPointer &= bitmaskUC;
-        *dataPointer |= valueUC;
-    }
-    else if ((lengthInBit + bitOffset) <= 64)
-    {
-        uint64* dataPointer = (uint64*)&target[byteOffset];
-
-        *dataPointer &= bitmask;
-        *dataPointer |= value;
+        // memcpy avoids the misaligned multi-byte cast (and OOB) that the
+        // previous (uint16/uint32/uint64*) version did
+        int32  numBytes = (bitOffset + lengthInBit + 7) >> 3;
+        uint64 buf      = 0;
+        std::memcpy(&buf, &target[byteOffset], numBytes);
+        buf = (buf & bitmask) | value;
+        std::memcpy(&target[byteOffset], &buf, numBytes);
     }
     else
     {
@@ -350,29 +323,14 @@ uint64 unpackBitsBE(uint8* target, int32 byteOffset, int32 bitOffset, uint8 leng
 
     uint64 retVal = 0;
 
-    if ((lengthInBit + bitOffset) <= 8)
+    if ((lengthInBit + bitOffset) <= 64)
     {
-        uint8* dataPointer = &target[byteOffset];
-
-        retVal = ((*dataPointer) & (uint8)bitmask) >> bitOffset;
-    }
-    else if ((lengthInBit + bitOffset) <= 16)
-    {
-        uint16* dataPointer = (uint16*)&target[byteOffset];
-
-        retVal = ((*dataPointer) & (uint16)bitmask) >> bitOffset;
-    }
-    else if ((lengthInBit + bitOffset) <= 32)
-    {
-        uint32* dataPointer = (uint32*)&target[byteOffset];
-
-        retVal = ((*dataPointer) & (uint32)bitmask) >> bitOffset;
-    }
-    else if ((lengthInBit + bitOffset) <= 64)
-    {
-        uint64* dataPointer = (uint64*)&target[byteOffset];
-
-        retVal = ((*dataPointer) & bitmask) >> bitOffset;
+        // memcpy avoids the misaligned multi-byte cast (and OOB) that the
+        // previous (uint16/uint32/uint64*) version did
+        int32  numBytes = (bitOffset + lengthInBit + 7) >> 3;
+        uint64 buf      = 0;
+        std::memcpy(&buf, &target[byteOffset], numBytes);
+        retVal = (buf & bitmask) >> bitOffset;
     }
     else
     {
