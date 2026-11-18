@@ -381,8 +381,8 @@ auto CDataLoader::GetPlayersList(SearchRequest sr, int* count) const -> std::vec
         "rank_windurst, race, mjob, sjob, mlvl, slvl, languages, settings, seacom_type, disconnecting, gmHiddenEnabled, muted, "
         "linkshellid1, linkshellid2 "
         "FROM accounts_sessions "
+        "JOIN chars USING (charid) " // joined first, so the zone filter runs before the other joins
         "LEFT JOIN accounts_parties USING (charid) "
-        "LEFT JOIN chars USING (charid) "
         "LEFT JOIN char_look USING (charid) "
         "LEFT JOIN char_stats USING (charid) "
         "LEFT JOIN char_profile USING(charid) "
@@ -390,6 +390,7 @@ auto CDataLoader::GetPlayersList(SearchRequest sr, int* count) const -> std::vec
         "WHERE charname IS NOT NULL "
         "AND (? = 0 OR mjob = ?) "
         "AND (? = 0 OR (seacom_type & 0xF0) = ?) "
+        "AND (? = 0 OR IF(pos_zone = 0, pos_prevzone, pos_zone) IN (SELECT zone FROM JSON_TABLE(?, '$[*]' COLUMNS (zone SMALLINT UNSIGNED PATH '$')) AS zones)) "
         "ORDER BY charname ASC");
     constexpr auto byIds = db::Query(
         "SELECT charid, partyid, charname, pos_zone, pos_prevzone, nation, rank_sandoria, rank_bastok, unity_leader, "
@@ -406,12 +407,15 @@ auto CDataLoader::GetPlayersList(SearchRequest sr, int* count) const -> std::vec
         "WHERE charname IS NOT NULL "
         "AND (? = 0 OR mjob = ?) "
         "AND (? = 0 OR (seacom_type & 0xF0) = ?) "
+        "AND (? = 0 OR IF(pos_zone = 0, pos_prevzone, pos_zone) IN (SELECT zone FROM JSON_TABLE(?, '$[*]' COLUMNS (zone SMALLINT UNSIGNED PATH '$')) AS zones)) "
         "ORDER BY charname ASC");
 
-    // The second statement's ids are still bound as a JSON array for JSON_TABLE.
-    const auto rset = ids.empty()
-                          ? db::preparedStmt(everyone, sr.jobid, sr.jobid, sr.commentType, sr.commentType)
-                          : db::preparedStmt(byIds, fmt::format("[{}]", fmt::join(ids, ",")), sr.jobid, sr.jobid, sr.commentType, sr.commentType);
+    // The ids and the zones are bound as JSON arrays for JSON_TABLE. The zones keep their unused slots of 0, so a
+    // character with no zone matches any area search of fewer than 16 zones.
+    const auto zones = fmt::format("[{}]", fmt::join(sr.zoneid, ","));
+    const auto rset  = ids.empty()
+                           ? db::preparedStmt(everyone, sr.jobid, sr.jobid, sr.commentType, sr.commentType, sr.zoneid[0], zones)
+                           : db::preparedStmt(byIds, fmt::format("[{}]", fmt::join(ids, ",")), sr.jobid, sr.jobid, sr.commentType, sr.commentType, sr.zoneid[0], zones);
     if (rset && rset->rowsCount())
     {
         while (rset->next())
@@ -535,12 +539,6 @@ auto CDataLoader::GetPlayersList(SearchRequest sr, int* count) const -> std::vec
                 player.sjob = player.mjob;
                 player.slvl = player.mlvl;
                 player.flags2 |= monstrosityFlag;
-            }
-
-            // filter by area
-            if (sr.zoneid[0] != 0 && !std::ranges::contains(sr.zoneid, player.zone))
-            {
-                continue;
             }
 
             // filter by linkshell ID
