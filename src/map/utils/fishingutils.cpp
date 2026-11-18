@@ -3299,7 +3299,8 @@ void LoadFishItems()
                                        "ff.size_type, ff.water_type, ff.log, ff.quest, "
                                        "ff.flags, ff.legendary, ff.legendary_flags, ff.item, "
                                        "ff.max_hook, ff.rarity, ff.required_keyitem, ff.required_catches, "
-                                       "ff.quest_status, ff.quest_only, ff.ranking, ff.contest "
+                                       "ff.quest_status, ff.quest_only, ff.ranking, ff.contest, "
+                                       "ff.hour_pattern, ff.moon_pattern, ff.month_pattern "
                                        "FROM fishing_fish ff "
                                        "WHERE ff.disabled = 0 AND ff.ranking < 99");
     FOR_DB_MULTIPLE_RESULTS(rset)
@@ -3348,6 +3349,9 @@ void LoadFishItems()
         fish->quest_only   = rset->get<bool>("quest_only");
         fish->ranking      = rset->get<uint8>("ranking");
         fish->contest      = rset->get<bool>("contest");
+        fish->hourPattern  = rset->get<uint8>("hour_pattern");
+        fish->moonPattern  = rset->get<uint8>("moon_pattern");
+        fish->monthPattern = rset->get<uint8>("month_pattern");
 
         FishList[fish->fishID] = fish;
     }
